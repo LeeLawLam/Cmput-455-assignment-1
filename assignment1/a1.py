@@ -1,35 +1,17 @@
-# CMPUT 455 Assignment 1 — PoE2 command interface
-# Implements the text protocol used by a1test.py
-#
-# Key rules implemented:
-# - Coordinates are 0-indexed: (x, y) == (col, row)
-# - Supports W,H in [1..20], handicap (float), cutoff (float, 0 means "infinite")
-# - Scores from maximal straight lines in 4 directions (E, S, SE, NE)
-#   * For each maximal run of length L >= 2: add 2^(L-1)
-#   * After counting all L>=2 runs, each stone not in any such run adds +1 (a length-1 line)
-#   * Overlaps are allowed; subsets are not (we only count starts of maximal runs)
-# - Player 2's handicap is added to their score
-# - genmove prints "x y" for a random legal move, or "resign" if none
-# - undo fails (= -1) if there is nothing to undo
-# - winner:
-#     * cutoff > 0: if one or both >= cutoff → higher score wins; tie => "unknown"
-#     * cutoff == 0: only decide when board is full; higher score wins; tie => "unknown"
-#
-# Notes:
-# - Each successful command prints "= 1" (by main_loop). Failures print "= -1" inside the handler.
-# - Some public environments are picky about trailing spaces in 'show'.
-#   The default here prints a single trailing NORMAL space at line end.
+# CMPUT 455 Assignment 1 starter code
+# Implement the specified commands to complete the assignment
+# Full assignment specification on Canvas
 
 import sys
 import random
 from typing import List, Tuple, Optional, Set
 
-# Toggle only if your local 'show' mismatches are due to line-end whitespace on tiny boards
-SHOW_NBSP_TRAILING = False  # If needed, set to True to use \u00A0 at EOL in show()
-
-
 class CommandInterface:
+    # The following is already defined and does not need modification
+    # However, you may change or add to this code as you see fit, e.g. adding class variables to init
+
     def __init__(self):
+        # Define the string to function command mapping
         self.command_dict = {
             "help": self.help,
             "init_game": self.init_game,
@@ -50,9 +32,8 @@ class CommandInterface:
         self.current: int = 1                      # 1 or 2
         self.history: List[Tuple[int, int, int]] = []  # (c, r, player)
         self.ended: bool = False
-
-    # ---------------- I/O loop & dispatch ----------------
-
+        
+    # Convert a raw string to a command and a list of arguments
     def process_command(self, string: str) -> bool:
         string = string.strip()
         if not string:
@@ -76,7 +57,10 @@ class CommandInterface:
             print(e, file=sys.stderr)
             print("= -1\n")
             return False
-
+        
+    # Will continuously receive and execute commands
+    # Commands should return True on success, and False on failure
+    # Commands will automatically print '= 1' at the end of execution on success
     def main_loop(self):
         while True:
             line = input()
@@ -91,8 +75,7 @@ class CommandInterface:
                 # Success status line is printed here
                 print("= 1\n")
 
-    # -------------------- Commands ----------------------
-
+    # List available commands
     def help(self, args: List[str]) -> bool:
         for cmd in self.command_dict:
             if cmd != "help":
@@ -100,8 +83,20 @@ class CommandInterface:
         print("exit")
         return True
 
-    # init_game w h p s
+
+    #======================================================================================
+    # End of predefined functionality. You will need to implement the following functions.
+    # Arguments are given as a list of strings
+    # We will only test error handling of the play command
+    #======================================================================================
+
     def init_game(self, args: List[str]) -> bool:
+        '''
+            >> init_game <num_cols> <num_rows> <handicap> <score_cutoff>
+            Initializes the game board with the dimension (<num_cols>, <num_rows>).
+            Sets the handicap for the second player as <handicap>.
+            Sets the winning score as <score_cutoff>.
+        '''
         if len(args) != 4:
             print("= -1\n")
             return False
@@ -131,8 +126,11 @@ class CommandInterface:
         self.ended = False
         return True
 
-    # legal x y
     def legal(self, args: List[str]) -> bool:
+        '''
+            >> legal <col> <row>
+            Checks if the current player can play at position (<col>, <row>) on the board.
+        '''
         if len(args) != 2:
             print("= -1\n")
             return False
@@ -146,8 +144,11 @@ class CommandInterface:
         print("yes" if self._is_legal(c, r) else "no")
         return True
 
-    # play x y
     def play(self, args: List[str]) -> bool:
+        '''
+            >> play <col> <row>
+            Places the current player's piece at position (<col>, <row>). Check if the move is legal before playing it.
+        '''
         if len(args) != 2:
             print("= -1\n")
             return False
@@ -174,9 +175,11 @@ class CommandInterface:
             self.current = 3 - self.current
         return True
 
-    # genmove
     def genmove(self, args: List[str]) -> bool:
-        # collect legal moves
+        '''
+            >> genmove
+            Generates and plays a random valid move.
+        '''
         moves = [(c, r)
                  for r in range(self.rows)
                  for c in range(self.cols)
@@ -198,8 +201,11 @@ class CommandInterface:
             self.current = 3 - self.current
         return True
 
-    # undo
     def undo(self, args: List[str]) -> bool:
+        '''
+            >> undo
+            Undoes the last move.
+        '''
         if args:
             # No args expected
             print("= -1\n")
@@ -213,8 +219,11 @@ class CommandInterface:
         self.ended = False
         return True
 
-    # score
     def score(self, args: List[str]) -> bool:
+        '''
+            >> score
+            Prints the scores.
+        '''
         p1, p2 = self._compute_scores()
         def fmt(x: float) -> str:
             xi = int(round(x))
@@ -222,16 +231,22 @@ class CommandInterface:
         print(f"{fmt(p1)} {fmt(p2)}")
         return True
 
-    # winner
     def winner(self, args: List[str]) -> bool:
+        '''
+            >> winner
+            Prints the winner information.
+        '''
         p1, p2 = self._compute_scores()
         w = self._winner_from_scores(p1, p2)
         print(w)
         return True
 
-    # show
     def show(self, args: List[str]) -> bool:
-        trail = ("\u00A0" if SHOW_NBSP_TRAILING else " ")
+        '''
+            >> show
+            Shows the game board.
+        '''
+        trail = " "
         for r in range(self.rows):
             row_syms = []
             for c in range(self.cols):
@@ -239,8 +254,6 @@ class CommandInterface:
                 row_syms.append('_' if v == 0 else str(v))
             print(' '.join(row_syms) + trail)
         return True
-
-    # -------------------- Helpers -----------------------
 
     def _in_bounds(self, c: int, r: int) -> bool:
         return 0 <= c < self.cols and 0 <= r < self.rows
@@ -344,7 +357,11 @@ class CommandInterface:
             return "unknown"
 
         return "unknown"
-
+    
+    #======================================================================================
+    # End of functions requiring implementation
+    #======================================================================================
 
 if __name__ == "__main__":
-    CommandInterface().main_loop()
+    interface = CommandInterface()
+    interface.main_loop()
